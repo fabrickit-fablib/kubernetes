@@ -1,7 +1,7 @@
-# sample
+# kubernetes
 
 ## Overview
-This is sample of fablib.
+This is kubernetes of fablib.
 
 ## Testing Guidelines
 ```
