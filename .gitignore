@@ -1,0 +1,8 @@
+.coverage
+.tox
+*.pyc
+*.pickle
+__cluster.yml
+test-repo/fablib
+test-repo/storage
+test-repo/databag
