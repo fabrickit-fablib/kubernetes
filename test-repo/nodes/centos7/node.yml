@@ -2,9 +2,18 @@ node_map:
   centos7:
     hosts:
       - 192.168.122.50
-      # - 192.168.122.51
+      - 192.168.122.51
     fabruns:
-      - kubernetes/base
+      - kubernetes/kubernetes
+  etcd:
+    hosts:
+      - 192.168.122.50
+      - 192.168.122.51
+    fabruns:
+      - kubernetes/etcd
 
 kubernetes:
   kube_master: 192.168.122.50
+
+etcd:
+  cluster_nodes: ${#node_map.centos7.hosts}

@@ -5,7 +5,7 @@
 #
 
 # The address on the local server to listen to.
-KUBE_API_ADDRESS="--insecure-bind-address=127.0.0.1"
+KUBE_API_ADDRESS="--insecure-bind-address=0.0.0.0"
 
 # The port on the local server to listen on.
 KUBE_API_PORT="--port=8080"
@@ -24,6 +24,7 @@ KUBE_SERVICE_ADDRESSES="--service-cluster-ip-range=10.254.0.0/16"
 
 # default admission control policies
 KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota"
+# KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,ServiceAccount,ResourceQuota"
 
 # Add your own!
-KUBE_API_ARGS=""
+KUBE_API_ARGS="--service_account_key_file=/etc/kubernetes/serviceaccount.key"

@@ -10,24 +10,30 @@ class Kubernetes(SimpleBase):
 
         self.packages = {
             'CentOS .*': [
+                'git',
+                'vim',
                 'wget',
-                'docker',
                 'kubernetes',
-                'etcd',
+                'flannel',
             ]
         }
 
         self.services = {
             'CentOS .*': [
-                'etcd',
-                'kube-apiserver',
-                'kube-controller-manager',
-                'kube-scheduler',
                 'kube-proxy',
                 'kubelet',
                 'docker',
+                'flanneld',
             ]
         }
+
+    def init_before(self):
+        if env.host == env.cluster['kubernetes']['kube_master']:
+            self.services['CentOS .*'].extend([
+                'kube-apiserver',
+                'kube-controller-manager',
+                'kube-scheduler',
+            ])
 
     def init_after(self):
         self.data.update({
@@ -43,9 +49,26 @@ class Kubernetes(SimpleBase):
 
         Service('firewalld').stop().disable()
 
-        filer.template('/etc/kubernetes/config', data=data)
-        filer.template('/etc/kubernetes/apiserver', data=data)
-        filer.template('/etc/kubernetes/kubelet', data=data)
-        filer.template('/etc/etcd/etcd.conf', data=data)
+        if filer.template('/etc/kubernetes/config', data=data):
+            self.handlers['restart_kube-api-server'] = True
+            self.handlers['restart_kube-controller-manager'] = True
+            self.handlers['restart_kube-scheduler'] = True
+            self.handlers['restart_kube-proxy'] = True
+            self.handlers['restart_kube-kubelet'] = True
+        if filer.template('/etc/kubernetes/apiserver', data=data):
+            self.handlers['restart_kube-api-server'] = True
+        if filer.template('/etc/kubernetes/controller-manager', data=data):
+            self.handlers['restart_kube-controller-manager'] = True
+        if filer.template('/etc/kubernetes/kubelet', data=data):
+            self.handlers['restart_kube-kubelet'] = True
 
-        self.restart_services().enable_services()
+        if env.host == env.cluster['kubernetes']['kube_master']:
+            filer.template('/tmp/flannel.json')
+            run('etcdctl set /atomic.io/network/config < /tmp/flannel.json')
+            filer.template('/etc/kubernetes/serviceaccount.key')
+
+        if filer.template('/etc/sysconfig/flanneld', data=data):
+            self.handlers['restart_flanneld']
+
+        self.start_services().enable_services()
+        self.exec_handlers()

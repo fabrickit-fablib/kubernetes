@@ -3,6 +3,26 @@
 ## Overview
 This is kubernetes of fablib.
 
+## Getting Started
+```
+# Setup test cluster
+$ fab test:l=kubernetes
+
+$ sudo virsh list --all
+ Id    名前                         状態
+ ----------------------------------------------------
+  12    centos7                        実行中
+  13    centos7_2                      実行中
+
+# login master
+$ ssh -A fabric@192.168.122.50
+
+$ kubectl get nodes
+NAME             STATUS    AGE
+192.168.122.50   Ready     2h
+192.168.122.51   Ready     2h
+```
+
 ## Testing Guidelines
 ```
 $ tox

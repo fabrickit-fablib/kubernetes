@@ -1,0 +1,7 @@
+etcd:
+  status_flow: [1]
+
+kubernetes:
+  status_flow: [1]
+  require:
+    kubernetes/etcd: 1

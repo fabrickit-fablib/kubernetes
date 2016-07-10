@@ -8,3 +8,5 @@ from fablib.kubernetes import Kubernetes
 def setup():
     kubernetes = Kubernetes()
     kubernetes.setup()
+
+    return {'status': 1}
