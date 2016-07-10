@@ -48,11 +48,13 @@ PING 10.20.15.2 (10.20.15.2) 56(84) bytes of data.
 ```
 
 ## set config of kubectl
+```
 $ kubectl config set-credentials myself --username=admin --password=admin \
 kubectl config set-cluster local-server --server=http://localhost:8080 \
 kubectl config set-context default-context --cluster=local-server --user=myself \
 kubectl config use-context default-context \
 kubectl config set contexts.default-context.namespace default \
+```
 
 ## Helloworld of pod, replicationcontroller, service
 ```
