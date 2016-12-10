@@ -1,10 +1,9 @@
 # cording: utf-8
 
-from fabkit import task
-from fablib.test_bootstrap import Libvirt
+from fabkit import task, container, env
 
 
 @task
 def setup():
-    libvirt = Libvirt()
-    libvirt.setup()
+    container.delete(env.cluster['container1'])
+    container.create(env.cluster['container1'])

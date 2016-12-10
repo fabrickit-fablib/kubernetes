@@ -14,6 +14,10 @@ node_map:
 
 kubernetes:
   kube_master: 192.168.122.50
+  # network:
+  #   type: flannel
+  network:
+    type: calico
 
 etcd:
   cluster_nodes: ${#node_map.centos7.hosts}

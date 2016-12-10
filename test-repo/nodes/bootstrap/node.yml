@@ -5,35 +5,38 @@ node_map:
     fabruns:
       - test_bootstrap/base
 
-test_bootstrap:
+container1:
+  provider: libvirt
   libvirt:
     gateway: 192.168.122.1
     netmask: 255.255.255.0
   libvirt_vms:
-    - name: centos7
-      template: user-data_centos7
-      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
-      vcpus: 1
+    - name: libvirt-1
       ip: 192.168.122.50
-      ram: 4096
-      disk_size: 20
-    - name: centos7_2
       template: user-data_centos7
       src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
       vcpus: 1
+      ram: 2048
+      disk_size: 40
+      disk_size: 40
+    - name: libvirt-2
       ip: 192.168.122.51
-      ram: 4096
-      disk_size: 20
+      template: user-data_centos7
+      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
+      vcpus: 1
+      ram: 2048
+      disk_size: 40
+      disk_size: 40
   iptables:
-    - ip: 192.168.122.55
+    - ip: 192.168.122.50
       ports:
         - [40080, 40080]
         - [43306, 43306]
-        - [44000, 44000]
         - [49999, 49999]
-    - ip: 192.168.122.50
-      ports:
-        - [50400, 4000]
+        - [3000, 43000]
     - ip: 192.168.122.51
       ports:
-        - [51400, 4000]
+        - [40080, 40080]
+        - [43306, 43306]
+        - [49999, 49999]
+        - [3000, 43000]
