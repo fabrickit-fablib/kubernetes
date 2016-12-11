@@ -10,10 +10,13 @@ class Kubernetes(SimpleBase):
 
         self.packages = {
             'CentOS .*': [
+                'epel-release',
                 'git',
                 'vim',
                 'wget',
-                'kubernetes',
+                'jq',
+                'docker-engine',
+                # 'kubernetes',
             ]
         }
 
@@ -21,12 +24,12 @@ class Kubernetes(SimpleBase):
             'CentOS .*': [
                 'kube-proxy',
                 'kubelet',
-                'docker',
             ]
         }
 
     def init_before(self):
         data = env.cluster[self.data_key]
+
         if env.host == data['kube_master']:
             self.services['CentOS .*'].extend([
                 'kube-apiserver',
@@ -51,12 +54,17 @@ class Kubernetes(SimpleBase):
 
     def setup(self):
         data = self.init()
-        self.install_packages()
 
         sudo('setenforce 0')
         filer.Editor('/etc/selinux/config').s('SELINUX=enforcing', 'SELINUX=disable')
-
         Service('firewalld').stop().disable()
+
+        filer.template('/etc/yum.repos.d/docker.repo', data=data)
+        self.install_packages()
+        self.install_kubenetes()
+
+        Service('docker').start().enable()
+        self.setup_network()
 
         if filer.template('/etc/kubernetes/config', data=data):
             self.handlers['restart_kube-api-server'] = True
@@ -74,9 +82,43 @@ class Kubernetes(SimpleBase):
         if env.host == env.cluster['kubernetes']['kube_master']:
             filer.template('/etc/kubernetes/serviceaccount.key')
 
-        self.setup_network()
         self.start_services().enable_services()
         self.exec_handlers()
+
+        self.put_samples()
+
+    def put_samples(self):
+        filer.mkdir('/tmp/kubesamples')
+        for sample in ['nginx-rc.yaml', 'nginx-svc.yaml']:
+            filer.template('/tmp/kubesamples/{0}'.format(sample), src='samples/{0}'.format(sample))
+
+    def install_kubenetes(self, version='1.4.7'):
+        user.add('kube', group='kube')
+
+        kubenetes_url = 'https://storage.googleapis.com/kubernetes-release/release/v{0}/bin/linux/amd64/'.format(version)  # noqa
+        with api.cd('/tmp'):
+            for binally in ['hyperkube', 'kubectl',  # kubernetes-client
+                            'kubelet', 'kube-proxy',  # kubernetes-node
+                            'kube-apiserver', 'kube-scheduler', 'kube-controller-manager',  # kubernetes-master # noqa
+                            ]:
+                sudo('[ -e /usr/bin/{0} ] || (wget {1}{0}; chmod 755 {0}; mv {0} /usr/bin/)'.format(
+                    binally, kubenetes_url))
+
+            cni_url = 'https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz'  # noqa
+            sudo('[ -e /usr/bin/cnitool ] || (wget {0}; tar xf cni-v0.3.0.tgz -C /usr/bin/)'.format(
+                cni_url))
+
+        filer.mkdir('/etc/kubernetes', owner='kube:kube')
+        filer.mkdir('/etc/kubernetes/ssl', owner='kube:kube')
+        filer.mkdir('/var/run/kubernetes', owner='kube:kube')
+        filer.mkdir('/var/lib/kubelet', owner='kube:kube')
+        for service in ['kubelet', 'kube-proxy',  # kubernetes-node
+                        'kube-apiserver', 'kube-controller-manager', 'kube-scheduler'  # kubernetes-master  # noqa
+                        ]:
+            filer.template('/usr/lib/systemd/system/{0}.service'.format(service),
+                           src='services/{0}.service'.format(service))
+
+        sudo('systemctl daemon-reload')
 
     def setup_network(self):
         data = self.init()
@@ -89,6 +131,7 @@ class Kubernetes(SimpleBase):
                 self.handlers['restart_flanneld'] = True
 
         elif self.network['type'] == 'calico':
+
             with api.warn_only():
                 result = sudo('calicoctl node show | grep {0}'.format(
                     env.node['ip']['default_dev']['ip']))

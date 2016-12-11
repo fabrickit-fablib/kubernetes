@@ -1,0 +1,5 @@
+[docker]
+name=Docker Repository
+baseurl=https://yum.dockerproject.org/repo/main/centos/$releasever/
+gpgcheck=0
+enabled=1
