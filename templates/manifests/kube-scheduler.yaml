@@ -11,7 +11,7 @@ spec:
     command:
     - /hyperkube
     - scheduler
-    - --master=http://127.0.0.1:8080
+    - --master=https://{{ kube_master }}:443
     - --leader-elect=true
     resources:
       requests:
@@ -23,3 +23,11 @@ spec:
         port: 10251
       initialDelaySeconds: 15
       timeoutSeconds: 15
+    volumeMounts:
+    - mountPath: /etc/ssl/certs
+      name: ssl-certs-host
+      readOnly: true
+  volumes:
+  - hostPath:
+      path: {{ ssl_certs_host_path }}
+    name: ssl-certs-host

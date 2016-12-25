@@ -13,8 +13,12 @@ node_map:
       - kubernetes/etcd
 
 kubernetes:
+  version: 1.5.1
   kube_master: 192.168.122.50
   k8s_service_ip: 10.3.0.1
+  dns_service_ip: 10.3.0.10
+  service_ip_range: 10.3.0.0/24
+  etcd_endpoints: http://192.168.122.50:2379
   # network:
   #   type: flannel
   network:

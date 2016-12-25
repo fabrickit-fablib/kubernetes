@@ -7,7 +7,7 @@ spec:
   hostNetwork: true
   containers:
   - name: kube-apiserver
-    image: quay.io/coreos/hyperkube:v1.5.1_coreos.0
+    image: quay.io/coreos/hyperkube:v{{ version }}_coreos.0
     command:
     - /hyperkube
     - apiserver
@@ -16,14 +16,15 @@ spec:
     - --allow-privileged=true
     - --service-cluster-ip-range={{ service_ip_range }}
     - --secure-port=443
-    - --advertise-address={{ advertise_ip }}
+    - --advertise-address={{ my_ip }}
     - --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota
     - --tls-cert-file=/etc/kubernetes/ssl/apiserver.pem
     - --tls-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
     - --client-ca-file=/etc/kubernetes/ssl/ca.pem
     - --service-account-key-file=/etc/kubernetes/ssl/apiserver-key.pem
     - --runtime-config=extensions/v1beta1/networkpolicies=true
-    - --anonymous-auth=false
+    # - --anonymous-auth=false
+    - --anonymous-auth=true
     livenessProbe:
       httpGet:
         host: 127.0.0.1
@@ -50,5 +51,5 @@ spec:
       path: /etc/kubernetes/ssl
     name: ssl-certs-kubernetes
   - hostPath:
-      path: /usr/share/ca-certificates
+      path: {{ ssl_certs_host_path }}
     name: ssl-certs-host

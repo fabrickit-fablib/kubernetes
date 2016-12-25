@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import time
 from fabkit import *  # noqa
 from fablib.base import SimpleBase
 
@@ -49,7 +50,9 @@ class Kubernetes(SimpleBase):
 
     def init_after(self):
         self.data.update({
+            'hostname': env.host,
             'my_ip': env.node['ip']['default_dev']['ip'],
+            'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
         })
 
     def setup(self):
@@ -67,6 +70,35 @@ class Kubernetes(SimpleBase):
         Service('docker').start().enable()
         self.setup_network()
 
+        filer.mkdir('/etc/kubernetes/manifests')
+        filer.template('/etc/kubernetes/manifests/kube-proxy.yaml', data=data)
+        if env.host == env.cluster['kubernetes']['kube_master']:
+            # filer.template('/etc/kubernetes/serviceaccount.key')
+            filer.template('/etc/kubernetes/ssl/serviceaccount.key')
+            filer.template('/etc/kubernetes/manifests/kube-apiserver.yaml', data=data)
+            filer.template('/etc/kubernetes/manifests/kube-controller-manager.yaml', data=data)
+            filer.template('/etc/kubernetes/manifests/kube-scheduler.yaml', data=data)
+
+            filer.mkdir('/etc/kubernetes/addons')
+            filer.template('/etc/kubernetes/addons/kube-dns.yaml', data=data)
+            filer.template('/etc/kubernetes/addons/kube-dashboard.yaml', data=data)
+
+        Service('kubelet').start().enable()
+
+        if env.host == env.cluster['kubernetes']['kube_master']:
+            for count in range(10):
+                with api.warn_only():
+                    result = run('curl http://localhost:8080/version')
+                    if result.return_code == 0:
+                        break
+
+                    time.sleep(100)
+
+            sudo('kubectl get services --namespace kube-system | grep kube-dns || kubectl create -f /etc/kubernetes/addons/kube-dns.yaml')  # noqa
+            sudo('kubectl get services --namespace kube-system | grep kubernetes-dashboard || kubectl create -f /etc/kubernetes/addons/kube-dashboard.yaml')  # noqa
+
+        return
+
         if filer.template('/etc/kubernetes/config', data=data):
             self.handlers['restart_kube-api-server'] = True
             self.handlers['restart_kube-controller-manager'] = True
@@ -81,7 +113,12 @@ class Kubernetes(SimpleBase):
             self.handlers['restart_kube-kubelet'] = True
 
         if env.host == env.cluster['kubernetes']['kube_master']:
-            filer.template('/etc/kubernetes/serviceaccount.key')
+            # filer.template('/etc/kubernetes/serviceaccount.key')
+            filer.template('/etc/kubernetes/ssl/serviceaccount.key')
+            filer.mkdir('/etc/kubernetes/manifests')
+            filer.template('/etc/kubernetes/manifests/kube-apiserver.yaml')
+
+        return
 
         self.start_services().enable_services()
         self.exec_handlers()
@@ -120,10 +157,12 @@ class Kubernetes(SimpleBase):
         for sample in ['nginx-rc.yaml', 'nginx-svc.yaml']:
             filer.template('/tmp/kubesamples/{0}'.format(sample), src='samples/{0}'.format(sample))
 
-    def install_kubenetes(self, version='1.5.1'):
+    def install_kubenetes(self):
+        data = self.init()
         user.add('kube', group='kube')
 
-        kubenetes_url = 'https://storage.googleapis.com/kubernetes-release/release/v{0}/bin/linux/amd64/'.format(version)  # noqa
+        kubenetes_url = 'https://storage.googleapis.com/kubernetes-release/release/v{0}/bin/linux/amd64/'.format(data['version'])  # noqa
+
         with api.cd('/tmp'):
             for binally in ['hyperkube', 'kubectl',  # kubernetes-client
                             'kubelet', 'kube-proxy',  # kubernetes-node
@@ -132,9 +171,9 @@ class Kubernetes(SimpleBase):
                 sudo('[ -e /usr/bin/{0} ] || (wget {1}{0}; chmod 755 {0}; mv {0} /usr/bin/)'.format(
                     binally, kubenetes_url))
 
+            filer.mkdir('/opt/cni/bin')
             cni_url = 'https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz'  # noqa
-            sudo('[ -e /usr/bin/cnitool ] || (wget {0}; tar xf cni-v0.3.0.tgz -C /usr/bin/)'.format(
-                cni_url))
+            sudo('[ -e /opt/cni/bin/cnitool ] || (wget {0}; tar xf cni-v0.3.0.tgz -C /opt/cni/bin/)'.format(cni_url))
 
         filer.mkdir('/etc/kubernetes', owner='kube:kube')
         filer.mkdir('/etc/kubernetes/ssl', owner='kube:kube')
@@ -144,7 +183,7 @@ class Kubernetes(SimpleBase):
                         'kube-apiserver', 'kube-controller-manager', 'kube-scheduler'  # kubernetes-master  # noqa
                         ]:
             filer.template('/usr/lib/systemd/system/{0}.service'.format(service),
-                           src='services/{0}.service'.format(service))
+                           src='services/{0}.service'.format(service), data=data)
 
         sudo('systemctl daemon-reload')
 
@@ -161,21 +200,21 @@ class Kubernetes(SimpleBase):
         elif self.network['type'] == 'calico':
 
             with api.warn_only():
-                result = sudo('calicoctl node show | grep {0}'.format(
+                result = sudo('/opt/cni/bin/calicoctl node show | grep {0}'.format(
                     env.node['ip']['default_dev']['ip']))
 
             if result.return_code != 0:
                 with api.cd('/tmp'):
                     sudo('wget https://github.com/projectcalico/calico-containers/releases/download/v0.19.0/calicoctl')  # noqa
                     sudo('chmod 755 calicoctl')
-                    sudo('mv calicoctl /usr/bin/')
+                    sudo('mv calicoctl /opt/cni/bin/')
                     sudo('wget https://github.com/projectcalico/calico-cni/releases/download/v1.3.0/calico')  # noqa
                     sudo('chmod 755 calico')
-                    sudo('mv calico /usr/bin/')
+                    sudo('mv calico /opt/cni/bin/')
 
-                sudo('ETCD_AUTHORITY=127.0.0.1:2379; calicoctl node --ip={0}'.format(
+                sudo('ETCD_AUTHORITY=127.0.0.1:2379; /opt/cni/bin/calicoctl node --ip={0}'.format(
                     env.node['ip']['default_dev']['ip']))
-                sudo('calicoctl node show')
+                sudo('/opt/cni/bin/calicoctl node show')
 
             filer.mkdir('/etc/cni/net.d')
             filer.template('/etc/cni/net.d/10-calico.conf', data=data)

@@ -11,7 +11,7 @@ spec:
     command:
     - /hyperkube
     - proxy
-    - --master=http://127.0.0.1:8080
+    - --master=https://{{ kube_master }}:443
     securityContext:
       privileged: true
     volumeMounts:
@@ -20,5 +20,5 @@ spec:
       readOnly: true
   volumes:
   - hostPath:
-      path: /usr/share/ca-certificates
+      path: {{ ssl_certs_host_path }}
     name: ssl-certs-host
