@@ -62,6 +62,7 @@ class Kubernetes(SimpleBase):
         filer.template('/etc/yum.repos.d/docker.repo', data=data)
         self.install_packages()
         self.install_kubenetes()
+        self.create_tls_assets()
 
         Service('docker').start().enable()
         self.setup_network()
@@ -87,12 +88,39 @@ class Kubernetes(SimpleBase):
 
         self.put_samples()
 
+    def create_tls_assets(self):
+        # https://coreos.com/kubernetes/docs/latest/openssl.html
+        data = self.init()
+        filer.template('/etc/kubernetes/ssl/openssl.cnf')
+        filer.template('/etc/kubernetes/ssl/worker-openssl.cnf')
+
+        with api.cd('/etc/kubernetes/ssl'):
+            with api.shell_env(MASTER_HOST=data['kube_master'],
+                               K8S_SERVICE_IP=data['k8s_service_ip'],
+                               WORKER_IP=env.host,
+                               WORKER_FQDN=env.host):
+
+                filer.template('/etc/kubernetes/ssl/ca.pem')
+                filer.template('/etc/kubernetes/ssl/ca-key.pem')
+                sudo('cp ca.pem /usr/share/pki/ca-trust-source/anchors/ca.pem')
+                sudo('update-ca-trust extract')
+
+                sudo('[ -e apiserver-key.pem ] || openssl genrsa -out apiserver-key.pem 2048')
+                sudo('[ -e apiserver.csr ] || openssl req -new -key apiserver-key.pem -out apiserver.csr -subj "/CN=kube-apiserver" -config openssl.cnf')
+                sudo('[ -e apiserver.pem ] || openssl x509 -req -in apiserver.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out apiserver.pem -days 365 -extensions v3_req -extfile openssl.cnf')
+
+                sudo('[ -e worker-key.pem ] || openssl genrsa -out worker-key.pem 2048')
+                sudo('[ -e worker.csr ] || openssl req -new -key worker-key.pem -out worker.csr -subj "/CN=${WORKER_FQDN}" -config worker-openssl.cnf')
+                sudo('[ -e worker.pem ] || openssl x509 -req -in worker.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out worker.pem -days 365 -extensions v3_req -extfile worker-openssl.cnf')
+
+                sudo('chmod 600 *key*')
+
     def put_samples(self):
         filer.mkdir('/tmp/kubesamples')
         for sample in ['nginx-rc.yaml', 'nginx-svc.yaml']:
             filer.template('/tmp/kubesamples/{0}'.format(sample), src='samples/{0}'.format(sample))
 
-    def install_kubenetes(self, version='1.4.7'):
+    def install_kubenetes(self, version='1.5.1'):
         user.add('kube', group='kube')
 
         kubenetes_url = 'https://storage.googleapis.com/kubernetes-release/release/v{0}/bin/linux/amd64/'.format(version)  # noqa

@@ -14,6 +14,7 @@ node_map:
 
 kubernetes:
   kube_master: 192.168.122.50
+  k8s_service_ip: 10.3.0.1
   # network:
   #   type: flannel
   network:
