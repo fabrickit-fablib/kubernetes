@@ -53,6 +53,9 @@ class Kubernetes(SimpleBase):
             'hostname': env.host,
             'my_ip': env.node['ip']['default_dev']['ip'],
             'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
+            'addons': ['kube-dns', 'kubernetes-dashboard',
+                       'heapster', 'monitoring-grafana', 'monitoring-influxdb',
+                       'logging']
         })
 
     def setup(self):
@@ -72,16 +75,14 @@ class Kubernetes(SimpleBase):
 
         filer.mkdir('/etc/kubernetes/manifests')
         filer.template('/etc/kubernetes/manifests/kube-proxy.yaml', data=data)
+        filer.template('/etc/kubernetes/manifests/fluentd-es.yaml', data=data)
+
         if env.host == env.cluster['kubernetes']['kube_master']:
             # filer.template('/etc/kubernetes/serviceaccount.key')
             filer.template('/etc/kubernetes/ssl/serviceaccount.key')
             filer.template('/etc/kubernetes/manifests/kube-apiserver.yaml', data=data)
             filer.template('/etc/kubernetes/manifests/kube-controller-manager.yaml', data=data)
             filer.template('/etc/kubernetes/manifests/kube-scheduler.yaml', data=data)
-
-            filer.mkdir('/etc/kubernetes/addons')
-            filer.template('/etc/kubernetes/addons/kube-dns.yaml', data=data)
-            filer.template('/etc/kubernetes/addons/kube-dashboard.yaml', data=data)
 
         Service('kubelet').start().enable()
 
@@ -94,8 +95,14 @@ class Kubernetes(SimpleBase):
 
                     time.sleep(100)
 
-            sudo('kubectl get services --namespace kube-system | grep kube-dns || kubectl create -f /etc/kubernetes/addons/kube-dns.yaml')  # noqa
-            sudo('kubectl get services --namespace kube-system | grep kubernetes-dashboard || kubectl create -f /etc/kubernetes/addons/kube-dashboard.yaml')  # noqa
+            filer.mkdir('/etc/kubernetes/addons')
+            for addon in data['addons']:
+                addon_file = '/etc/kubernetes/addons/{0}.yaml'.format(addon)
+                is_change = filer.template(addon_file, data=data)
+                sudo('kubectl get services --namespace kube-system | grep {0}'
+                     ' || kubectl create -f {1}'.format(addon, addon_file))
+                if is_change:
+                    sudo('kubectl apply -f {0}'.format(addon_file))
 
         return
 
