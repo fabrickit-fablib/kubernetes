@@ -101,8 +101,11 @@ class Kubernetes(SimpleBase):
                 is_change = filer.template(addon_file, data=data)
                 sudo('kubectl get services --namespace kube-system | grep {0}'
                      ' || kubectl create -f {1}'.format(addon, addon_file))
+
                 if is_change:
                     sudo('kubectl apply -f {0}'.format(addon_file))
+
+        self.put_samples()
 
         return
 
@@ -129,8 +132,6 @@ class Kubernetes(SimpleBase):
 
         self.start_services().enable_services()
         self.exec_handlers()
-
-        self.put_samples()
 
     def create_tls_assets(self):
         # https://coreos.com/kubernetes/docs/latest/openssl.html
@@ -225,3 +226,15 @@ class Kubernetes(SimpleBase):
 
             filer.mkdir('/etc/cni/net.d')
             filer.template('/etc/cni/net.d/10-calico.conf', data=data)
+
+    def setup_nginx_ingress(self):
+        # https://github.com/nginxinc/kubernetes-ingress/tree/master/examples/daemon-set
+        data = self.init()
+        addon = 'nginx-ingress'
+        addon_file = '/etc/kubernetes/addons/{0}.yaml'.format(addon)
+        is_change = filer.template(addon_file, data=data)
+        sudo('kubectl get pods --all-namespaces | grep {0}'
+             ' || kubectl create -f {1}'.format(addon, addon_file))
+
+        if is_change:
+            sudo('kubectl apply -f {0}'.format(addon_file))
