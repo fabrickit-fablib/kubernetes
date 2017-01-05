@@ -1,0 +1,53 @@
+job:
+  pipelines:
+    - name: bootstrap
+      runs:
+        - delete container1
+        - create container1
+        - if status == 0:
+          - sh echo success bootstrap
+        - else:
+          - sh echo failed bootstrap
+    - name: setup
+      runs:
+        - setup
+    - name: clean
+      runs:
+        - delete container1
+
+container1:
+  provider: libvirt
+  libvirt:
+    gateway: 192.168.122.1
+    netmask: 255.255.255.0
+  libvirt_vms:
+    - name: kubernetes-centos7-1
+      ip: 192.168.122.131
+      template: user-data_centos7
+      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
+      vcpus: 1
+      ram: 4096
+      disk_size: 40
+      disk_size: 40
+    - name: kubernetes-centos7-2
+      ip: 192.168.122.132
+      template: user-data_centos7
+      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
+      vcpus: 1
+      ram: 4096
+      disk_size: 40
+      disk_size: 40
+  iptables:
+    - ip: 192.168.122.131
+      ports:
+        - [443, 40443]
+        - [80, 40080]
+        - [3306, 43306]
+        - [9999, 49999]
+        - [3000, 43000]
+    - ip: 192.168.122.132
+      ports:
+        - [80, 50080]
+        - [3306, 53306]
+        - [9999, 59999]
+        - [3000, 53000]
