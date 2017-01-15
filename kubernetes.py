@@ -17,11 +17,17 @@ class Kubernetes(SimpleBase):
                 'version': '0.3.0',
                 'type': 'calico',
                 'calico_plugin_version': '1.3.0',
-            }
+            },
+            'helm': {
+                'version': '2.1.3',
+            },
+            'tiller': {
+                'version': '2.1.3',
+            },
         }
 
         self.packages = {
-            'CentOS .*': []
+            'CentOS .*': ['socat']
         }
 
         self.services = {
@@ -37,7 +43,7 @@ class Kubernetes(SimpleBase):
             'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
             'addons': ['kube-dns', 'kubernetes-dashboard',
                        'heapster', 'monitoring-grafana', 'monitoring-influxdb',
-                       'logging']
+                       'logging', 'tiller-deploy']
         })
 
         self.docker = Docker()
@@ -157,6 +163,12 @@ class Kubernetes(SimpleBase):
             for binally in ['calico', 'calico-ipam']:
                 calico_url = 'https://github.com/projectcalico/calico-cni/releases/download/v{0}/{1}'.format(data['cni']['calico_plugin_version'], binally)  # noqa
                 sudo('[ -e /opt/cni/bin/{0} ] || (wget {1} && chmod 755 {0} && mv {0} /opt/cni/bin/)'.format(binally, calico_url))  # noqa
+
+            # install helm
+            sudo('[ -e /usr/bin/helm ]'
+                 ' || (wget http://storage.googleapis.com/kubernetes-helm/helm-v{0}-linux-amd64.tar.gz'  # noqa
+                 ' && tar xf helm-v{0}-linux-amd64.tar.gz && mv linux-amd64/helm /usr/bin/)'.format(
+                 data['helm']['version']))
 
         filer.mkdir('/etc/kubernetes')
         filer.mkdir('/etc/kubernetes/ssl')
