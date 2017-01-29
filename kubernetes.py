@@ -17,6 +17,7 @@ class Kubernetes(SimpleBase):
                 'version': '0.3.0',
                 'type': 'calico',
                 'calico_plugin_version': '1.3.0',
+                'calico_version': '1.0.0',
             },
             'helm': {
                 'version': '2.1.3',
@@ -49,7 +50,8 @@ class Kubernetes(SimpleBase):
         self.docker = Docker()
         if self.data['cni']['type'] == 'calico':
             self.cni = Calico()
-        elif self.data['cni']['type'] == 'flannel':
+
+        if self.data['cni']['type'] == 'flannel':
             self.cni = Flannel()
 
     def setup(self):
@@ -61,7 +63,7 @@ class Kubernetes(SimpleBase):
 
         self.docker.setup()
 
-        self.cni.setup()
+        # self.cni.setup()
         if self.data['cni']['type'] == 'calico':
             filer.mkdir('/etc/cni/net.d')
             filer.template('/etc/cni/net.d/10-calico.conf', data=data)
@@ -90,6 +92,8 @@ class Kubernetes(SimpleBase):
                         break
 
                     time.sleep(100)
+
+            self.setup_calico()
 
             filer.mkdir('/etc/kubernetes/addons')
             for addon in data['addons']:
@@ -182,6 +186,14 @@ class Kubernetes(SimpleBase):
 
         sudo('systemctl daemon-reload')
 
+        calicoctl_url = 'https://github.com/projectcalico/calico-containers/releases/download/v{0}/calicoctl'.format(data['cni']['calico_version'])  # noqa
+        calicoctl_path = '/usr/bin/calicoctl'
+        if not filer.exists(calicoctl_path):
+            with api.cd('/tmp'):
+                sudo('wget {0}'.format(calicoctl_url))
+                sudo('chmod 755 calicoctl')
+                sudo('mv calicoctl {0}'.format(calicoctl_path))
+
     def setup_nginx_ingress(self):
         # https://github.com/nginxinc/kubernetes-ingress/tree/master/examples/daemon-set
         data = self.init()
@@ -193,3 +205,22 @@ class Kubernetes(SimpleBase):
 
         if is_change:
             sudo('kubectl apply -f {0}'.format(addon_file))
+
+    def setup_calico(self):
+        data = self.init()
+        filer.mkdir('/etc/kubernetes/addons')
+        addon_file = '/etc/kubernetes/addons/calico.yaml'
+        is_change = filer.template(addon_file, data=data)
+        sudo('kubectl get ds --namespace kube-system | grep calico-node'
+             ' || kubectl create -f {0}'.format(addon_file))
+
+        if is_change:
+            sudo('kubectl apply -f {0}'.format(addon_file))
+
+        for count in range(10):
+            with api.warn_only():
+                result = sudo('calicoctl node status')
+                if result.return_code == 0:
+                    break
+
+                time.sleep(100)

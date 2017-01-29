@@ -18,7 +18,8 @@ spec:
         name: tiller
     spec:
       containers:
-      - image: gcr.io/kubernetes-helm/tiller:v{{ tiller.version }}
+      - image: syunkitada/kubernetes-helm-tiller:v{{ tiller.version }}
+        # image: gcr.io/kubernetes-helm/tiller:v{{ tiller.version }} is unknown
         imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
