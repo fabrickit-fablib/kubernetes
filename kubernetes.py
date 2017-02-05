@@ -4,8 +4,6 @@ import time
 from fabkit import *  # noqa
 from fablib.base import SimpleBase
 from fablib.docker import Docker
-from fablib.calico import Calico
-from flannel import Flannel
 
 
 class Kubernetes(SimpleBase):
@@ -44,15 +42,10 @@ class Kubernetes(SimpleBase):
             'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
             'addons': ['kube-dns', 'kubernetes-dashboard',
                        'heapster', 'monitoring-grafana', 'monitoring-influxdb',
-                       'logging', 'tiller-deploy']
+                       'logging', 'fluentd-es', 'tiller-deploy']
         })
 
         self.docker = Docker()
-        if self.data['cni']['type'] == 'calico':
-            self.cni = Calico()
-
-        if self.data['cni']['type'] == 'flannel':
-            self.cni = Flannel()
 
     def setup(self):
         data = self.init()
@@ -98,14 +91,8 @@ class Kubernetes(SimpleBase):
             filer.mkdir('/etc/kubernetes/addons')
             for addon in data['addons']:
                 addon_file = '/etc/kubernetes/addons/{0}.yaml'.format(addon)
-                is_change = filer.template(addon_file, data=data)
-                sudo('kubectl get services --namespace kube-system | grep {0}'
-                     ' || kubectl create -f {1}'.format(addon, addon_file))
-
-                if is_change:
-                    sudo('kubectl apply -f {0}'.format(addon_file))
-
-        self.put_samples()
+                filer.template(addon_file, data=data)
+                sudo('kubectl apply -f {0}'.format(addon_file))
 
     def create_tls_assets(self):
         # https://coreos.com/kubernetes/docs/latest/openssl.html
@@ -140,21 +127,13 @@ class Kubernetes(SimpleBase):
 
                 sudo('chmod 600 *key*')
 
-    def put_samples(self):
-        filer.mkdir('/tmp/kubesamples')
-        for sample in ['nginx-rc.yaml', 'nginx-svc.yaml']:
-            filer.template('/tmp/kubesamples/{0}'.format(sample), src='samples/{0}'.format(sample))
-
     def install_kubenetes(self):
         data = self.init()
 
         kubenetes_url = 'https://storage.googleapis.com/kubernetes-release/release/v{0}/bin/linux/amd64/'.format(data['version'])  # noqa
 
         with api.cd('/tmp'):
-            for binally in ['hyperkube', 'kubectl',  # kubernetes-client
-                            'kubelet', 'kube-proxy',  # kubernetes-node
-                            'kube-apiserver', 'kube-scheduler', 'kube-controller-manager',  # kubernetes-master # noqa
-                            ]:
+            for binally in ['kubectl', 'kubelet']:
                 sudo('[ -e /usr/bin/{0} ] || (wget {1}{0}; chmod 755 {0}; mv {0} /usr/bin/)'.format(
                     binally, kubenetes_url))
 
@@ -178,9 +157,7 @@ class Kubernetes(SimpleBase):
         filer.mkdir('/etc/kubernetes/ssl')
         filer.mkdir('/var/run/kubernetes')
         filer.mkdir('/var/lib/kubelet')
-        for service in ['kubelet', 'kube-proxy',  # kubernetes-node
-                        'kube-apiserver', 'kube-controller-manager', 'kube-scheduler'  # kubernetes-master  # noqa
-                        ]:
+        for service in ['kubelet']:
             filer.template('/usr/lib/systemd/system/{0}.service'.format(service),
                            src='services/{0}.service'.format(service), data=data)
 
