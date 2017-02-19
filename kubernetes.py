@@ -56,18 +56,12 @@ class Kubernetes(SimpleBase):
 
         self.docker.setup()
 
-        # self.cni.setup()
-        # if self.data['cni']['type'] == 'calico':
-        #     filer.mkdir('/etc/cni/net.d')
-        #     filer.template('/etc/cni/net.d/10-calico.conf', data=data)
-
         self.install_packages()
         self.install_kubenetes()
         self.create_tls_assets()
 
         filer.mkdir('/etc/kubernetes/manifests')
         filer.template('/etc/kubernetes/manifests/kube-proxy.yaml', data=data)
-        filer.template('/etc/kubernetes/manifests/fluentd-es.yaml', data=data)
 
         if env.host == env.cluster['kubernetes']['kube_master']:
             filer.template('/etc/kubernetes/ssl/serviceaccount.key')
