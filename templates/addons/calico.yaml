@@ -33,17 +33,17 @@ data:
         }
     }
 
-  cni_network_config: |-
-    {
-      "name": "calico-k8s-network",
-      "type": "calico",
-      "etcd_authority": "{{ etcd_authority }}",
-      "etcd_endpoints": "{{ etcd_endpoints }}",
-      "log_level": "info",
-      "ipam": {
-          "type": "calico-ipam"
-      }
-    }
+  # cni_network_config: |-
+  #   {
+  #     "name": "calico-k8s-network",
+  #     "type": "calico",
+  #     "etcd_authority": "{{ etcd_authority }}",
+  #     "etcd_endpoints": "{{ etcd_endpoints }}",
+  #     "log_level": "info",
+  #     "ipam": {
+  #         "type": "calico-ipam"
+  #     }
+  #   }
 
   # The default IP Pool to be created for the cluster.
   # Pod IP addresses will be assigned from this pool.
@@ -104,8 +104,8 @@ spec:
                   name: calico-config
                   key: enable_bgp
             # Disable file logging so `kubectl logs` works.
-            - name: CALICO_DISABLE_FILE_LOGGING
-              value: "true"
+            # - name: CALICO_DISABLE_FILE_LOGGING
+            #   value: "true"
             # Don't configure a default pool.  This is done by the Job
             # below.
             - name: NO_DEFAULT_POOLS
@@ -161,59 +161,59 @@ spec:
           hostPath:
             path: /etc/cni/net.d
 
-# ---
-# 
-# # This manifest deploys the Calico policy controller on Kubernetes.
-# # See https://github.com/projectcalico/k8s-policy
-# apiVersion: extensions/v1beta1
-# kind: Deployment
-# metadata:
-#   name: calico-policy-controller
-#   namespace: kube-system
-#   labels:
-#     k8s-app: calico-policy
-# spec:
-#   # The policy controller can only have a single active instance.
-#   replicas: 1
-#   strategy:
-#     type: Recreate
-#   template:
-#     metadata:
-#       name: calico-policy-controller
-#       namespace: kube-system
-#       labels:
-#         k8s-app: calico-policy-controller
-#       annotations:
-#         scheduler.alpha.kubernetes.io/critical-pod: ''
-#         scheduler.alpha.kubernetes.io/tolerations: |
-#           [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
-#            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
-#     spec:
-#       # The policy controller must run in the host network namespace so that
-#       # it isn't governed by policy that would prevent it from working.
-#       hostNetwork: true
-#       containers:
-#         - name: calico-policy-controller
-#           image: calico/kube-policy-controller:v0.5.2
-#           env:
-#             # The location of the Calico etcd cluster.
-#             - name: ETCD_ENDPOINTS
-#               valueFrom:
-#                 configMapKeyRef:
-#                   name: calico-config
-#                   key: etcd_endpoints
-#             # The location of the Kubernetes API.  Use the default Kubernetes
-#             # service for API access.
-#             - name: K8S_API
-#               value: "https://kubernetes.default:443"
-#             # Since we're running in the host namespace and might not have KubeDNS
-#             # access, configure the container's /etc/hosts to resolve
-#             # kubernetes.default to the correct service clusterIP.
-#             - name: CONFIGURE_ETC_HOSTS
-#               value: "true"
-# 
-# ---
-# 
+---
+
+# This manifest deploys the Calico policy controller on Kubernetes.
+# See https://github.com/projectcalico/k8s-policy
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: calico-policy-controller
+  namespace: kube-system
+  labels:
+    k8s-app: calico-policy
+spec:
+  # The policy controller can only have a single active instance.
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      name: calico-policy-controller
+      namespace: kube-system
+      labels:
+        k8s-app: calico-policy-controller
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
+    spec:
+      # The policy controller must run in the host network namespace so that
+      # it isn't governed by policy that would prevent it from working.
+      hostNetwork: true
+      containers:
+        - name: calico-policy-controller
+          image: calico/kube-policy-controller:v0.5.2
+          env:
+            # The location of the Calico etcd cluster.
+            - name: ETCD_ENDPOINTS
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_endpoints
+            # The location of the Kubernetes API.  Use the default Kubernetes
+            # service for API access.
+            - name: K8S_API
+              value: "https://kubernetes.default:443"
+            # Since we're running in the host namespace and might not have KubeDNS
+            # access, configure the container's /etc/hosts to resolve
+            # kubernetes.default to the correct service clusterIP.
+            - name: CONFIGURE_ETC_HOSTS
+              value: "true"
+
+---
+
 # ## This manifest deploys a Job which performs one time
 # # configuration of Calico
 apiVersion: batch/v1
