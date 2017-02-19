@@ -40,9 +40,9 @@ class Kubernetes(SimpleBase):
             'hostname': env.host,
             'my_ip': env.node['ip']['default_dev']['ip'],
             'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
-            'addons': ['kube-dns', 'kubernetes-dashboard',
+            'addons': ['kube-proxy', 'kube-dns', 'kubernetes-dashboard',
                        'heapster', 'monitoring-grafana', 'monitoring-influxdb',
-                       'logging', 'fluentd-es', 'tiller-deploy', 'prometheus']
+                       'logging-es', 'logging-kibana', 'fluentd-es', 'tiller-deploy', 'prometheus']
         })
 
         self.docker = Docker()
@@ -56,21 +56,13 @@ class Kubernetes(SimpleBase):
 
         self.docker.setup()
 
-        # self.cni.setup()
-        # if self.data['cni']['type'] == 'calico':
-        #     filer.mkdir('/etc/cni/net.d')
-        #     filer.template('/etc/cni/net.d/10-calico.conf', data=data)
-
         self.install_packages()
         self.install_kubenetes()
         self.create_tls_assets()
 
-        filer.mkdir('/etc/kubernetes/manifests')
-        filer.template('/etc/kubernetes/manifests/kube-proxy.yaml', data=data)
-        filer.template('/etc/kubernetes/manifests/fluentd-es.yaml', data=data)
-
         if env.host == env.cluster['kubernetes']['kube_master']:
             filer.template('/etc/kubernetes/ssl/serviceaccount.key')
+            filer.mkdir('/etc/kubernetes/manifests')
             filer.template('/etc/kubernetes/manifests/kube-apiserver.yaml', data=data)
             filer.template('/etc/kubernetes/manifests/kube-controller-manager.yaml', data=data)
             filer.template('/etc/kubernetes/manifests/kube-scheduler.yaml', data=data)
