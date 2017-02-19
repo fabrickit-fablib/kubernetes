@@ -1,0 +1,35 @@
+kind: DaemonSet
+apiVersion: extensions/v1beta1
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-proxy
+  template:
+    metadata:
+      namespace: kube-system
+      labels:
+        k8s-app: kube-proxy
+    spec:
+      hostNetwork: true
+      containers:
+      - name: kube-proxy
+        image: quay.io/coreos/hyperkube:v1.5.1_coreos.0
+        command:
+        - /hyperkube
+        - proxy
+        - --master=https://{{ kube_master }}:443
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /etc/ssl/certs
+          name: ssl-certs-host
+          readOnly: true
+      volumes:
+      - hostPath:
+          path: {{ ssl_certs_host_path }}
+        name: ssl-certs-host
