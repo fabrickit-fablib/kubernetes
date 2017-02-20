@@ -42,7 +42,8 @@ class Kubernetes(SimpleBase):
             'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
             'addons': ['kube-proxy', 'kube-dns', 'kubernetes-dashboard',
                        'heapster', 'monitoring-grafana', 'monitoring-influxdb',
-                       'logging-es', 'logging-kibana', 'fluentd-es', 'tiller-deploy', 'prometheus']
+                       'logging-es', 'logging-kibana', 'fluentd-es', 'tiller-deploy',
+                       'prometheus', 'prometheus-node-exporter']
         })
 
         self.docker = Docker()
