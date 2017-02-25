@@ -28,7 +28,6 @@ container1:
       vcpus: 1
       ram: 4096
       disk_size: 40
-      disk_size: 40
     - name: kubernetes-centos7-2
       ip: 192.168.122.132
       template: user-data_centos7
@@ -36,6 +35,12 @@ container1:
       vcpus: 1
       ram: 4096
       disk_size: 40
+    - name: kubernetes-centos7-3
+      ip: 192.168.122.133
+      template: user-data_centos7
+      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
+      vcpus: 1
+      ram: 4096
       disk_size: 40
   iptables:
     - ip: 192.168.122.131
@@ -47,7 +52,13 @@ container1:
         - [3000, 43000]
     - ip: 192.168.122.132
       ports:
-        - [80, 50080]
+        - [80, 52080]
+        - [3306, 52306]
+        - [9999, 52999]
+        - [3000, 52000]
+    - ip: 192.168.122.133
+      ports:
+        - [80, 53080]
         - [3306, 53306]
-        - [9999, 59999]
+        - [9999, 53999]
         - [3000, 53000]

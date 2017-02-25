@@ -3,12 +3,14 @@ node_map:
     hosts:
       - 192.168.122.131
       - 192.168.122.132
+      - 192.168.122.133
     fabruns:
       - kubernetes/kubernetes
   etcd:
     hosts:
       - 192.168.122.131
       - 192.168.122.132
+      - 192.168.122.133
     fabruns:
       - kubernetes/etcd
 
