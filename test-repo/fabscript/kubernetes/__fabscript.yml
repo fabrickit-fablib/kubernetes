@@ -1,7 +1,17 @@
+bootstrap:
+  status_flow: [1]
+
 etcd:
   status_flow: [1]
+  require:
+    kubernetes/bootstrap: 1
 
 kubernetes:
   status_flow: [1]
   require:
     kubernetes/etcd: 1
+
+kubernetes2:
+  status_flow: [1]
+  require:
+    kubernetes/kubernetes: 1

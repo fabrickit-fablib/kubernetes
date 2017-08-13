@@ -1,7 +1,7 @@
 # coding: utf-8
 
 from fabkit import task
-from fablib.etcd import Etcd
+from fablib.kubernetes import Etcd
 
 
 @task

@@ -1,0 +1,66 @@
+job:
+  pipelines:
+    - name: bootstrap
+      runs:
+        - delete container1
+        - create container1
+        - if status == 0:
+          - sh echo success bootstrap
+        - else:
+          - sh echo failed bootstrap
+    - name: setup
+      runs:
+        - setup
+    - name: clean
+      runs:
+        - delete container1
+
+container1:
+  provider: libvirt
+  libvirt:
+    gateway: 192.168.122.1
+    netmask: 255.255.255.0
+  libvirt_vms:
+    - name: kubernetes-ubuntu7-1
+      ip: 192.168.122.131
+      template: user-data_ubuntu16
+      src_image: https://cloud-images.ubuntu.com/releases/16.04/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
+      vcpus: 1
+      ram: 4096
+      disk_size: 40
+    - name: kubernetes-ubuntu7-2
+      ip: 192.168.122.132
+      template: user-data_ubuntu16
+      src_image: https://cloud-images.ubuntu.com/releases/16.04/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
+      vcpus: 1
+      ram: 4096
+      disk_size: 40
+    - name: kubernetes-ubuntu7-3
+      ip: 192.168.122.133
+      template: user-data_ubuntu16
+      src_image: https://cloud-images.ubuntu.com/releases/16.04/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
+      vcpus: 1
+      ram: 4096
+      disk_size: 40
+  iptables:
+    - ip: 192.168.122.131
+      ports:
+        - [443, 41443]
+        - [80, 41080]
+        - [3306, 41306]
+        - [9999, 41999]
+        - [3000, 41300]
+    - ip: 192.168.122.132
+      ports:
+        - [443, 42443]
+        - [80, 42080]
+        - [3306, 42306]
+        - [9999, 42999]
+        - [3000, 42300]
+    - ip: 192.168.122.133
+      ports:
+        - [443, 42443]
+        - [80, 42080]
+        - [3306, 42306]
+        - [9999, 42999]
+        - [3000, 42300]

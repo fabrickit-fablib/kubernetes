@@ -1,27 +1,27 @@
 [Unit]
-Description=Kubernetes Kubelet Server
+Description=Kubernetes Kubelet
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 After=docker.service
 Requires=docker.service
 
 [Service]
-User=root
-WorkingDirectory=/var/lib/kubelet
 ExecStart=/usr/bin/kubelet \
-  --address=0.0.0.0 \
-  --api-servers=https://{{ kube_master }}:443 \
-  --cni-conf-dir=/etc/cni/net.d \
-  --network-plugin=cni \
+  --api-servers={{ api_servers }} \
   --allow-privileged=true \
-  --pod-manifest-path=/etc/kubernetes/manifests \
-  --hostname-override={{ hostname }} \
-  --cluster_dns={{ dns_service_ip }} \
-  --cluster_domain=cluster.local \
-  --tls-cert-file=/etc/kubernetes/ssl/worker.pem \
-  --tls-private-key-file=/etc/kubernetes/ssl/worker-key.pem \
-  --client-ca-file=/etc/kubernetes/ssl/ca.pem
-
+  --cluster-dns={{ cluster_dns }} \
+  --cluster-domain=cluster.local \
+  --container-runtime=docker \
+  --experimental-bootstrap-kubeconfig=/var/lib/kubelet/bootstrap.kubeconfig \
+  --network-plugin=kubenet \
+  --kubeconfig=/var/lib/kubelet/kubeconfig \
+  --serialize-image-pulls=false \
+  --register-node=true \
+  --tls-cert-file=/var/lib/kubelet/kubelet-client.crt \
+  --tls-private-key-file=/var/lib/kubelet/kubelet-client.key \
+  --cert-dir=/var/lib/kubelet \
+  --v=2
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

@@ -1,25 +1,22 @@
 node_map:
-  kubernetes2:
-    hosts:
-      - kubernetes-centos7-1.example.com
-    fabruns:
-      - kubernetes/kubernetes2
   kubernetes:
     hosts:
-      - kubernetes-centos7-[1-3].example.com
+      - 192.168.122.131
+      - 192.168.122.132
+      - 192.168.122.133
     fabruns:
-      - kubernetes/bootstrap
       - kubernetes/kubernetes
   etcd:
     hosts:
-      - kubernetes-centos7-[1-3].example.com
+      - 192.168.122.131
+      - 192.168.122.132
+      - 192.168.122.133
     fabruns:
       - kubernetes/etcd
 
 kubernetes:
   # version: 1.5.1
-  version: 1.7.3
-  vip: 172.16.100.131
+  version: 1.6.2
   kube_master: 192.168.122.131
   k8s_service_ip: 10.3.0.1
   dns_service_ip: 10.3.0.10

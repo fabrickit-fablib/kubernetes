@@ -10,18 +10,21 @@ class Kubernetes(SimpleBase):
     def __init__(self):
         self.data_key = 'kubernetes'
         self.data = {
-            'version': '1.5.1',
+            'service_cluster_ip_range': '10.32.0.0/16',
+            'cluster_dns': '10.32.0.10',
+            'cluster_cidr': '10.200.0.0/16',
+            'version': '1.7.3',
             'cni': {
-                'version': '0.3.0',
+                'version': '0.5.2',
                 'type': 'calico',
                 'calico_plugin_version': '1.3.0',
                 'calico_version': '1.0.0',
             },
             'helm': {
-                'version': '2.1.3',
+                'version': '2.5.1',
             },
             'tiller': {
-                'version': '2.1.3',
+                'version': '2.5.1',
             },
         }
 
@@ -36,7 +39,13 @@ class Kubernetes(SimpleBase):
         }
 
     def init_after(self):
+
         self.data.update({
+            'bootstrap_token': databag.get('kubernetes.bootstrap_token'),
+            'etcd_servers': databag.get('kubernetes.etcd_servers'),
+            'certificate_aythority_data': databag.get('kubernetes.certificate_aythority_data'),
+            'api_servers': databag.get('kubernetes.api_servers'),
+
             'hostname': env.host,
             'my_ip': env.node['ip']['default_dev']['ip'],
             'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
@@ -50,16 +59,119 @@ class Kubernetes(SimpleBase):
 
     def setup(self):
         data = self.init()
+        filer.mkdir('/var/lib/kubernetes/')
+        filer.mkdir('/var/run/kubernetes/')
+        filer.mkdir('/var/lib/kubelet/')
+        filer.mkdir('/var/lib/kube-proxy/')
+        filer.mkdir('/etc/kubernetes/')
+        filer.mkdir('/etc/kubernetes/addons')
+
+        with api.cd('/tmp'):
+            for binary in ['kubectl', 'kube-apiserver', 'kube-controller-manager', 'kube-scheduler', 'kube-proxy', 'kubelet']:
+                if not filer.exists('/usr/bin/{0}'.format(binary)):
+                    run('wget https://storage.googleapis.com/kubernetes-release/release/v{0}/bin/linux/amd64/{1}'.format(data['version'], binary))
+                    sudo('chmod 755 {0}'.format(binary))
+                    sudo('cp {0} /usr/bin/'.format(binary))
+
+            if not filer.exists('/usr/bin/docker'):
+                run('wget https://get.docker.com/builds/Linux/x86_64/docker-1.12.6.tgz')
+                run('tar -xvf docker-1.12.6.tgz')
+                sudo('mv docker/docker* /usr/bin/')
+
+            if not filer.exists('/opt/cni'):
+                filer.mkdir('/opt/cni')
+                run('wget https://storage.googleapis.com/kubernetes-release/network-plugins/cni-amd64-0799f5732f2a11b329d9e3d51b9c8f2e3759f2ff.tar.gz')
+                sudo('tar -xvf cni-amd64-0799f5732f2a11b329d9e3d51b9c8f2e3759f2ff.tar.gz -C /opt/cni')
+
+        filer.template('/var/lib/kubernetes/token.csv', data=data)
+        sudo('cp /root/kubernetes-tls-assets/{ca,kubernetes,kubernetes-key}.pem /var/lib/kubernetes/')
+
+        filer.template('/etc/systemd/system/kube-apiserver.service', data=data)
+        filer.template('/etc/systemd/system/kube-controller-manager.service', data=data)
+        filer.template('/etc/systemd/system/kube-scheduler.service', data=data)
+        filer.template('/etc/systemd/system/kubelet.service', data=data)
+        filer.template('/etc/systemd/system/kube-proxy.service', data=data)
+        filer.template('/etc/systemd/system/docker.service', data=data)
+        sudo('systemctl daemon-reload')
+        sudo('systemctl start docker')
+
+        if env.host == env.hosts[0]:
+            sudo('systemctl start kube-apiserver')
+            sudo('systemctl start kube-controller-manager')
+            sudo('systemctl start kube-scheduler')
+            sudo('cp /root/kubernetes-tls-assets/ca-key.pem /var/lib/kubernetes/')
+
+            if not filer.exists('/root/kubeconfigs'):
+                filer.mkdir('/root/kubeconfigs')
+
+                sudo('kubectl config set-cluster kubernetes-the-hard-way'
+                     ' --certificate-authority=/var/lib/kubernetes/ca.pem'
+                     ' --embed-certs=true'
+                     ' --server=https://{0}:6443'
+                     ' --kubeconfig=/root/kubeconfigs/bootstrap.kubeconfig'.format(env['node']['ip']['default_dev']['ip']))
+
+                sudo('kubectl config set-credentials kubelet-bootstrap'
+                     ' --token={0}'
+                     ' --kubeconfig=/root/kubeconfigs/bootstrap.kubeconfig'.format(data['bootstrap_token']))
+
+                sudo('kubectl config set-context default'
+                     ' --cluster=kubernetes-the-hard-way'
+                     ' --user=kubelet-bootstrap'
+                     ' --kubeconfig=/root/kubeconfigs/bootstrap.kubeconfig')
+
+                sudo('kubectl config use-context default --kubeconfig=/root/kubeconfigs/bootstrap.kubeconfig')
+
+                sudo('kubectl config set-cluster kubernetes-the-hard-way'
+                     ' --certificate-authority=/var/lib/kubernetes/ca.pem'
+                     ' --embed-certs=true'
+                     ' --server=https://{0}:6443'
+                     ' --kubeconfig=/root/kubeconfigs/kube-proxy.kubeconfig'.format(env['node']['ip']['default_dev']['ip']))
+
+                sudo('kubectl config set-credentials kube-proxy'
+                     ' --client-certificate=/root/kubernetes-tls-assets/kube-proxy.pem'
+                     ' --client-key=/root/kubernetes-tls-assets/kube-proxy-key.pem'
+                     ' --embed-certs=true'
+                     ' --kubeconfig=/root/kubeconfigs/kube-proxy.kubeconfig')
+
+                sudo('kubectl config set-context default'
+                     ' --cluster=kubernetes-the-hard-way'
+                     ' --user=kube-proxy'
+                     ' --kubeconfig=/root/kubeconfigs/kube-proxy.kubeconfig')
+
+                sudo('kubectl config use-context default --kubeconfig=/root/kubeconfigs/kube-proxy.kubeconfig')
+
+                bootstrap_kubeconfig = sudo('cat /root/kubeconfigs/bootstrap.kubeconfig')
+                databag.set('kubernetes.bootstrap_kubeconfig', str(bootstrap_kubeconfig))
+                kube_proxy_kubeconfig = sudo('cat /root/kubeconfigs/kube-proxy.kubeconfig')
+                databag.set('kubernetes.kube_proxy_kubeconfig', str(kube_proxy_kubeconfig))
+                with api.warn_only():
+                    while True:
+                        result = run('ss -ln | grep ":6443 "')
+                        if result.return_code == 0:
+                            break
+                        time.sleep(10)
+
+                run('kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap')
+
+        bootstrap_kubeconfig = databag.get('kubernetes.bootstrap_kubeconfig')
+        kube_proxy_kubeconfig = databag.get('kubernetes.kube_proxy_kubeconfig')
+        filer.file('/var/lib/kubelet/bootstrap.kubeconfig', src_str=bootstrap_kubeconfig)
+        filer.file('/var/lib/kube-proxy/kube-proxy.kubeconfig', src_str=kube_proxy_kubeconfig)
+        sudo('systemctl start kubelet')
+        sudo('systemctl start kube-proxy')
+
+        return
 
         sudo('setenforce 0')
         filer.Editor('/etc/selinux/config').s('SELINUX=enforcing', 'SELINUX=disable')
         Service('firewalld').stop().disable()
+        # sudo('sysctl -w net.bridge.bridge-nf-call-iptables=1')
 
         self.docker.setup()
 
         self.install_packages()
         self.install_kubenetes()
-        self.create_tls_assets()
+        # self.create_tls_assets()
 
         if env.host == env.cluster['kubernetes']['kube_master']:
             filer.template('/etc/kubernetes/ssl/serviceaccount.key')
@@ -79,6 +191,8 @@ class Kubernetes(SimpleBase):
 
                     time.sleep(100)
 
+            return
+
             self.setup_calico()
 
             filer.mkdir('/etc/kubernetes/addons')
@@ -87,110 +201,14 @@ class Kubernetes(SimpleBase):
                 filer.template(addon_file, data=data)
                 sudo('kubectl apply -f {0}'.format(addon_file))
 
-    def create_tls_assets(self):
-        # https://coreos.com/kubernetes/docs/latest/openssl.html
+    def approve_certificate(self):
         data = self.init()
-        filer.template('/etc/kubernetes/ssl/openssl.cnf')
-        filer.template('/etc/kubernetes/ssl/worker-openssl.cnf')
+        run("for csr in `kubectl get csr | grep Pending | awk '{print $1}'`; do kubectl certificate approve $csr; done")
 
-        with api.cd('/etc/kubernetes/ssl'):
-            with api.shell_env(MASTER_HOST=data['kube_master'],
-                               K8S_SERVICE_IP=data['k8s_service_ip'],
-                               WORKER_IP=env.host,
-                               WORKER_FQDN=env.host):
-
-                filer.template('/etc/kubernetes/ssl/ca.pem')
-                filer.template('/etc/kubernetes/ssl/ca-key.pem')
-                sudo('cp ca.pem /usr/share/pki/ca-trust-source/anchors/ca.pem')
-                sudo('update-ca-trust extract')
-
-                sudo('[ -e apiserver-key.pem ] || openssl genrsa -out apiserver-key.pem 2048')
-                sudo('[ -e apiserver.csr ] || openssl req -new -key apiserver-key.pem '
-                     ' -out apiserver.csr -subj "/CN=kube-apiserver" -config openssl.cnf')
-                sudo('[ -e apiserver.pem ] || openssl x509 -req -in apiserver.csr '
-                     ' -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out apiserver.pem -days 365 '
-                     ' -extensions v3_req -extfile openssl.cnf')
-
-                sudo('[ -e worker-key.pem ] || openssl genrsa -out worker-key.pem 2048')
-                sudo('[ -e worker.csr ] || openssl req -new -key worker-key.pem -out worker.csr '
-                     ' -subj "/CN=${WORKER_FQDN}" -config worker-openssl.cnf')
-                sudo('[ -e worker.pem ] || openssl x509 -req -in worker.csr '
-                     ' -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out worker.pem -days 365 '
-                     ' -extensions v3_req -extfile worker-openssl.cnf')
-
-                sudo('chmod 600 *key*')
-
-    def install_kubenetes(self):
-        data = self.init()
-
-        kubenetes_url = 'https://storage.googleapis.com/kubernetes-release/release/v{0}/bin/linux/amd64/'.format(data['version'])  # noqa
-
-        with api.cd('/tmp'):
-            for binally in ['kubectl', 'kubelet']:
-                sudo('[ -e /usr/bin/{0} ] || (wget {1}{0}; chmod 755 {0}; mv {0} /usr/bin/)'.format(
-                    binally, kubenetes_url))
-
-            # install cni
-            filer.mkdir('/opt/cni/bin')
-            version = data['cni']['version']
-            cni_url = 'https://github.com/containernetworking/cni/releases/download/v{0}/cni-v{0}.tgz'.format(version)  # noqa
-            sudo('[ -e /opt/cni/bin/cnitool ] || (wget {0}; tar xf cni-v{1}.tgz -C /opt/cni/bin/)'.format(cni_url, version))  # noqa
-
-            for binally in ['calico', 'calico-ipam']:
-                calico_url = 'https://github.com/projectcalico/calico-cni/releases/download/v{0}/{1}'.format(data['cni']['calico_plugin_version'], binally)  # noqa
-                sudo('[ -e /opt/cni/bin/{0} ] || (wget {1} && chmod 755 {0} && mv {0} /opt/cni/bin/)'.format(binally, calico_url))  # noqa
-
-            # install helm
-            sudo('[ -e /usr/bin/helm ]'
-                 ' || (wget http://storage.googleapis.com/kubernetes-helm/helm-v{0}-linux-amd64.tar.gz'  # noqa
-                 ' && tar xf helm-v{0}-linux-amd64.tar.gz && mv linux-amd64/helm /usr/bin/)'.format(
-                 data['helm']['version']))
-
-        filer.mkdir('/etc/kubernetes')
-        filer.mkdir('/etc/kubernetes/ssl')
-        filer.mkdir('/var/run/kubernetes')
-        filer.mkdir('/var/lib/kubelet')
-        for service in ['kubelet']:
-            filer.template('/usr/lib/systemd/system/{0}.service'.format(service),
-                           src='services/{0}.service'.format(service), data=data)
-
-        sudo('systemctl daemon-reload')
-
-        calicoctl_url = 'https://github.com/projectcalico/calico-containers/releases/download/v{0}/calicoctl'.format(data['cni']['calico_version'])  # noqa
-        calicoctl_path = '/usr/bin/calicoctl'
-        if not filer.exists(calicoctl_path):
-            with api.cd('/tmp'):
-                sudo('wget {0}'.format(calicoctl_url))
-                sudo('chmod 755 calicoctl')
-                sudo('mv calicoctl {0}'.format(calicoctl_path))
-
-    def setup_nginx_ingress(self):
-        # https://github.com/nginxinc/kubernetes-ingress/tree/master/examples/daemon-set
-        data = self.init()
-        addon = 'nginx-ingress'
-        addon_file = '/etc/kubernetes/addons/{0}.yaml'.format(addon)
-        is_change = filer.template(addon_file, data=data)
-        sudo('kubectl get pods --all-namespaces | grep {0}'
-             ' || kubectl create -f {1}'.format(addon, addon_file))
-
-        if is_change:
-            sudo('kubectl apply -f {0}'.format(addon_file))
-
-    def setup_calico(self):
-        data = self.init()
-        filer.mkdir('/etc/kubernetes/addons')
-        addon_file = '/etc/kubernetes/addons/calico.yaml'
-        is_change = filer.template(addon_file, data=data)
-        sudo('kubectl get ds --namespace kube-system | grep calico-node'
-             ' || kubectl create -f {0}'.format(addon_file))
-
-        if is_change:
-            sudo('kubectl apply -f {0}'.format(addon_file))
-
-        for count in range(10):
-            with api.warn_only():
-                result = sudo('calicoctl node status')
-                if result.return_code == 0:
-                    break
-
-                time.sleep(100)
+        sudo('kubectl get secret calico-etcd-secrets -n kube-system'
+             ' || kubectl create secret generic calico-etcd-secrets -n kube-system'
+             ' --from-file=etcd-key=/etc/etcd/kubernetes-key.pem'
+             ' --from-file=etcd-cert=/etc/etcd/kubernetes.pem'
+             ' --from-file=etcd-ca=/etc/etcd/ca.pem')
+        filer.template('/etc/kubernetes/addons/calico.yaml', data=data)
+        run('kubectl apply -f /etc/kubernetes/addons/calico.yaml')

@@ -18,49 +18,36 @@ job:
 container1:
   provider: libvirt
   libvirt:
-    gateway: 192.168.122.1
+    gateway: 172.16.100.1
     netmask: 255.255.255.0
   libvirt_vms:
     - name: kubernetes-centos7-1
-      ip: 192.168.122.131
+      ports:
+        - {ip: 172.16.100.131, queues: 1, type: virtio}
+      nameservers:
+        - 172.16.100.1
       template: user-data_centos7
-      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
-      vcpus: 1
+      src_image: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1703.qcow2.xz
+      vcpus: 2
       ram: 4096
       disk_size: 40
     - name: kubernetes-centos7-2
-      ip: 192.168.122.132
+      ports:
+        - {ip: 172.16.100.132, queues: 1, type: virtio}
+      nameservers:
+        - 172.16.100.1
       template: user-data_centos7
-      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
-      vcpus: 1
+      src_image: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1703.qcow2.xz
+      vcpus: 2
       ram: 4096
       disk_size: 40
     - name: kubernetes-centos7-3
-      ip: 192.168.122.133
+      ports:
+        - {ip: 172.16.100.133, queues: 1, type: virtio}
+      nameservers:
+        - 172.16.100.1
       template: user-data_centos7
-      src_image: http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1511.qcow2c.xz
-      vcpus: 1
+      src_image: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1703.qcow2.xz
+      vcpus: 2
       ram: 4096
       disk_size: 40
-  iptables:
-    - ip: 192.168.122.131
-      ports:
-        - [443, 41443]
-        - [80, 41080]
-        - [3306, 41306]
-        - [9999, 41999]
-        - [3000, 41300]
-    - ip: 192.168.122.132
-      ports:
-        - [443, 42443]
-        - [80, 42080]
-        - [3306, 42306]
-        - [9999, 42999]
-        - [3000, 42300]
-    - ip: 192.168.122.133
-      ports:
-        - [443, 42443]
-        - [80, 42080]
-        - [3306, 42306]
-        - [9999, 42999]
-        - [3000, 42300]

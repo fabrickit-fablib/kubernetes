@@ -13,5 +13,5 @@ DNS.1 = kubernetes
 DNS.2 = kubernetes.default
 DNS.3 = kubernetes.default.svc
 DNS.4 = kubernetes.default.svc.cluster.local
-IP.1 = $ENV::K8S_SERVICE_IP
-IP.2 = $ENV::MASTER_HOST
+DNS.5 = *.example.com
+DNS.6 = *.k8s.example.com
