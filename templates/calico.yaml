@@ -42,8 +42,6 @@ data:
       metadata:
         cidr: {{ cluster_cidr }}
       spec:
-        ipip:
-          enabled: false
         nat-outgoing: true
 
   # If you're using TLS enabled etcd uncomment the following.
@@ -53,6 +51,32 @@ data:
   etcd_key: "/calico-secrets/etcd-key"
 
 ---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico
+  namespace: kube-system
+
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-cluster-rule
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: calico
+  namespace: kube-system
+
+---
+
 
 # The following contains k8s Secrets for use with a TLS enabled etcd cluster.
 # For information on populating Secrets, see http://kubernetes.io/docs/user-guide/secrets/
@@ -97,6 +121,7 @@ spec:
           [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
+      serviceAccount: calico
       hostNetwork: true
       containers:
         # Runs calico/node container on each Kubernetes node.  This
@@ -236,6 +261,7 @@ spec:
     spec:
       # The policy controller must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
+      serviceAccount: calico
       hostNetwork: true
       containers:
         - name: calico-policy-controller

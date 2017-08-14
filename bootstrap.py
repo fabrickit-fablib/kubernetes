@@ -11,15 +11,15 @@ class Bootstrap(SimpleBase):
         self.data = {}
 
         self.packages = {
-            'CentOS .*': ['wget', 'vim', 'git', 'tcpdump']
+            'CentOS .*': ['wget', 'vim', 'git', 'tcpdump', 'bridge-utils', 'ipset']
         }
         self.services = {}
 
     def setup(self):
         data = self.init()
-        sudo('setenforce 0')
-        filer.Editor('/etc/selinux/config').s('SELINUX=enforcing', 'SELINUX=disable')
-        Service('firewalld').stop().disable()
+        # sudo('setenforce 0')
+        # filer.Editor('/etc/selinux/config').s('SELINUX=enforcing', 'SELINUX=disable')
+        # Service('firewalld').stop().disable()
         self.install_packages()
         filer.mkdir('/root/kubernetes-tls-assets')
 

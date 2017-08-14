@@ -14,6 +14,7 @@ class Kubernetes(SimpleBase):
             'cluster_dns': '10.32.0.10',
             'cluster_cidr': '10.200.0.0/16',
             'version': '1.7.3',
+            'network_plugin': 'cni',
             'cni': {
                 'version': '0.5.2',
                 'type': 'calico',
@@ -212,3 +213,14 @@ class Kubernetes(SimpleBase):
              ' --from-file=etcd-ca=/etc/etcd/ca.pem')
         filer.template('/etc/kubernetes/addons/calico.yaml', data=data)
         run('kubectl apply -f /etc/kubernetes/addons/calico.yaml')
+
+        filer.mkdir('/var/log/calico')
+        filer.mkdir('/etc/calico')
+        filer.template('/etc/calico/calicoctl.cfg', data=data)
+        if not filer.exists('/usr/bin/calicoctl'):
+            run('wget https://github.com/projectcalico/calicoctl/releases/download/v1.4.1/calicoctl')
+            run('chmod 755 calicoctl')
+            sudo('sudo mv calicoctl /usr/bin/')
+            sudo('calicoctl node status')
+            sudo('calicoctl get ipPool')
+            sudo('calicoctl get policy')
