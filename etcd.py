@@ -27,7 +27,7 @@ class Etcd(SimpleBase):
 
     def init_after(self):
         etcd_name = 'default'
-        for i, node in enumerate(self.data['cluster_nodes']):
+        for i, node in enumerate(env['cluster']['node_map']['etcd']['hosts']):
             if node == env.host:
                 etcd_name = 'controller{0}'.format(i)
 

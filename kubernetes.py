@@ -12,26 +12,20 @@ class Kubernetes(SimpleBase):
         self.data = {
             'service_cluster_ip_range': '10.32.0.0/16',
             'cluster_dns': '10.32.0.10',
+            'dns_domain': 'cluster.local',
             'cluster_cidr': '10.200.0.0/16',
             'version': '1.7.3',
             'network_plugin': 'cni',
-            'cni': {
-                'version': '0.5.2',
-                'type': 'calico',
-                'calico_plugin_version': '1.3.0',
-                'calico_version': '1.0.0',
-            },
             'helm': {
                 'version': '2.5.1',
             },
             'tiller': {
                 'version': '2.5.1',
             },
+            'addons': ['calico', 'kube-dns', 'tiller-deploy']
         }
 
-        self.packages = {
-            'CentOS .*': ['socat']
-        }
+        self.packages = {}
 
         self.services = {
             'CentOS .*': [
@@ -47,16 +41,14 @@ class Kubernetes(SimpleBase):
             'certificate_aythority_data': databag.get('kubernetes.certificate_aythority_data'),
             'api_servers': databag.get('kubernetes.api_servers'),
 
-            'hostname': env.host,
-            'my_ip': env.node['ip']['default_dev']['ip'],
-            'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
-            'addons': ['kube-proxy', 'kube-dns', 'kubernetes-dashboard',
-                       'heapster', 'monitoring-grafana', 'monitoring-influxdb',
-                       'logging-es', 'logging-kibana', 'fluentd-es', 'tiller-deploy',
-                       'prometheus', 'prometheus-node-exporter']
+            # 'hostname': env.host,
+            # 'my_ip': env.node['ip']['default_dev']['ip'],
+            # 'ssl_certs_host_path': '/usr/share/pki/ca-trust-source/anchors',  # if coreos path: /usr/share/ca-certificates  # noqa
+            # 'addons': ['kube-proxy', 'kube-dns', 'kubernetes-dashboard',
+            #            'heapster', 'monitoring-grafana', 'monitoring-influxdb',
+            #            'logging-es', 'logging-kibana', 'fluentd-es', 'tiller-deploy',
+            #            'prometheus', 'prometheus-node-exporter']
         })
-
-        self.docker = Docker()
 
     def setup(self):
         data = self.init()
@@ -109,7 +101,7 @@ class Kubernetes(SimpleBase):
                      ' --certificate-authority=/var/lib/kubernetes/ca.pem'
                      ' --embed-certs=true'
                      ' --server=https://{0}:6443'
-                     ' --kubeconfig=/root/kubeconfigs/bootstrap.kubeconfig'.format(env['node']['ip']['default_dev']['ip']))
+                     ' --kubeconfig=/root/kubeconfigs/bootstrap.kubeconfig'.format(data['vip']))
 
                 sudo('kubectl config set-credentials kubelet-bootstrap'
                      ' --token={0}'
@@ -126,7 +118,7 @@ class Kubernetes(SimpleBase):
                      ' --certificate-authority=/var/lib/kubernetes/ca.pem'
                      ' --embed-certs=true'
                      ' --server=https://{0}:6443'
-                     ' --kubeconfig=/root/kubeconfigs/kube-proxy.kubeconfig'.format(env['node']['ip']['default_dev']['ip']))
+                     ' --kubeconfig=/root/kubeconfigs/kube-proxy.kubeconfig'.format(data['vip']))
 
                 sudo('kubectl config set-credentials kube-proxy'
                      ' --client-certificate=/root/kubernetes-tls-assets/kube-proxy.pem'
@@ -161,47 +153,6 @@ class Kubernetes(SimpleBase):
         sudo('systemctl start kubelet')
         sudo('systemctl start kube-proxy')
 
-        return
-
-        sudo('setenforce 0')
-        filer.Editor('/etc/selinux/config').s('SELINUX=enforcing', 'SELINUX=disable')
-        Service('firewalld').stop().disable()
-        # sudo('sysctl -w net.bridge.bridge-nf-call-iptables=1')
-
-        self.docker.setup()
-
-        self.install_packages()
-        self.install_kubenetes()
-        # self.create_tls_assets()
-
-        if env.host == env.cluster['kubernetes']['kube_master']:
-            filer.template('/etc/kubernetes/ssl/serviceaccount.key')
-            filer.mkdir('/etc/kubernetes/manifests')
-            filer.template('/etc/kubernetes/manifests/kube-apiserver.yaml', data=data)
-            filer.template('/etc/kubernetes/manifests/kube-controller-manager.yaml', data=data)
-            filer.template('/etc/kubernetes/manifests/kube-scheduler.yaml', data=data)
-
-        Service('kubelet').start().enable()
-
-        if env.host == env.cluster['kubernetes']['kube_master']:
-            for count in range(10):
-                with api.warn_only():
-                    result = run('curl http://localhost:8080/version')
-                    if result.return_code == 0:
-                        break
-
-                    time.sleep(100)
-
-            return
-
-            self.setup_calico()
-
-            filer.mkdir('/etc/kubernetes/addons')
-            for addon in data['addons']:
-                addon_file = '/etc/kubernetes/addons/{0}.yaml'.format(addon)
-                filer.template(addon_file, data=data)
-                sudo('kubectl apply -f {0}'.format(addon_file))
-
     def approve_certificate(self):
         data = self.init()
         run("for csr in `kubectl get csr | grep Pending | awk '{print $1}'`; do kubectl certificate approve $csr; done")
@@ -211,8 +162,6 @@ class Kubernetes(SimpleBase):
              ' --from-file=etcd-key=/etc/etcd/kubernetes-key.pem'
              ' --from-file=etcd-cert=/etc/etcd/kubernetes.pem'
              ' --from-file=etcd-ca=/etc/etcd/ca.pem')
-        filer.template('/etc/kubernetes/addons/calico.yaml', data=data)
-        run('kubectl apply -f /etc/kubernetes/addons/calico.yaml')
 
         filer.mkdir('/var/log/calico')
         filer.mkdir('/etc/calico')
@@ -221,6 +170,13 @@ class Kubernetes(SimpleBase):
             run('wget https://github.com/projectcalico/calicoctl/releases/download/v1.4.1/calicoctl')
             run('chmod 755 calicoctl')
             sudo('sudo mv calicoctl /usr/bin/')
-            sudo('calicoctl node status')
-            sudo('calicoctl get ipPool')
-            sudo('calicoctl get policy')
+
+        if not filer.exists('/usr/bin/helm'):
+            run('wget https://storage.googleapis.com/kubernetes-helm/helm-v2.5.1-linux-amd64.tar.gz')
+            run('tar -xf helm-v2.5.1-linux-amd64.tar.gz')
+            sudo('mv linux-amd64/helm /usr/bin/')
+
+        for addon in data['addons']:
+            addon_file = '/etc/kubernetes/addons/{0}.yaml'.format(addon)
+            filer.template(addon_file, data=data)
+            sudo('kubectl apply -f {0}'.format(addon_file))

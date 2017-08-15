@@ -7,11 +7,11 @@ from fablib.base import SimpleBase
 
 class Bootstrap(SimpleBase):
     def __init__(self):
-        self.data_key = 'bootstrap'
+        self.data_key = 'kubernetes'
         self.data = {}
 
         self.packages = {
-            'CentOS .*': ['wget', 'vim', 'git', 'tcpdump', 'bridge-utils', 'ipset']
+            'CentOS .*': ['wget', 'vim', 'git', 'tcpdump', 'bridge-utils', 'ipset', 'socat']
         }
         self.services = {}
 
@@ -24,6 +24,8 @@ class Bootstrap(SimpleBase):
         filer.mkdir('/root/kubernetes-tls-assets')
 
         if env.host == env.hosts[0]:
+            sudo('ip addr show dev eth0 | grep {0}/24 || ip addr add {0}/24 dev eth0'.format(data['vip']))
+
             etcd_servers = ''
             etcd_initial_cluster = ''
             api_servers = ''
