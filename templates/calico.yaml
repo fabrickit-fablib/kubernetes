@@ -42,6 +42,8 @@ data:
       metadata:
         cidr: {{ cluster_cidr }}
       spec:
+        ipip:
+          enabled: true
         nat-outgoing: true
 
   # If you're using TLS enabled etcd uncomment the following.

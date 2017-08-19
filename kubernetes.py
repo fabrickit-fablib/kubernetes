@@ -3,7 +3,6 @@
 import time
 from fabkit import *  # noqa
 from fablib.base import SimpleBase
-from fablib.docker import Docker
 
 
 class Kubernetes(SimpleBase):
@@ -22,7 +21,7 @@ class Kubernetes(SimpleBase):
             'tiller': {
                 'version': '2.5.1',
             },
-            'addons': ['calico', 'kube-dns', 'tiller-deploy']
+            'addons': ['roles', 'calico', 'kube-dns', 'tiller-deploy']
         }
 
         self.packages = {}
@@ -78,6 +77,8 @@ class Kubernetes(SimpleBase):
 
         filer.template('/var/lib/kubernetes/token.csv', data=data)
         sudo('cp /root/kubernetes-tls-assets/{ca,kubernetes,kubernetes-key}.pem /var/lib/kubernetes/')
+
+        filer.template('/etc/kubernetes/static-password.csv', data=data)
 
         filer.template('/etc/systemd/system/kube-apiserver.service', data=data)
         filer.template('/etc/systemd/system/kube-controller-manager.service', data=data)
