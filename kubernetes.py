@@ -16,10 +16,10 @@ class Kubernetes(SimpleBase):
             'version': '1.7.3',
             'network_plugin': 'cni',
             'helm': {
-                'version': '2.5.1',
+                'version': '2.6.1',
             },
             'tiller': {
-                'version': '2.5.1',
+                'version': '2.6.1',
             },
             'addons': ['roles', 'calico', 'kube-dns', 'tiller-deploy']
         }
@@ -173,8 +173,12 @@ class Kubernetes(SimpleBase):
             sudo('sudo mv calicoctl /usr/bin/')
 
         if not filer.exists('/usr/bin/helm'):
-            run('wget https://storage.googleapis.com/kubernetes-helm/helm-v2.5.1-linux-amd64.tar.gz')
-            run('tar -xf helm-v2.5.1-linux-amd64.tar.gz')
+            run('wget https://storage.googleapis.com/kubernetes-helm/helm-v{0}-linux-amd64.tar.gz'.format(
+                data['helm']['version']
+            ))
+            run('tar -xf helm-v{0}-linux-amd64.tar.gz'.format(
+                data['helm']['version']
+            ))
             sudo('mv linux-amd64/helm /usr/bin/')
 
         for addon in data['addons']:
