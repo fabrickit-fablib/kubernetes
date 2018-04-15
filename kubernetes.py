@@ -13,7 +13,7 @@ class Kubernetes(SimpleBase):
             'cluster_dns': '10.32.0.10',
             'dns_domain': 'cluster.local',
             'cluster_cidr': '10.200.0.0/16',
-            'version': '1.7.3',
+            'version': '1.10.1',  # 1.7.3
             'network_plugin': 'cni',
             'helm': {
                 'version': '2.6.1',
@@ -48,6 +48,19 @@ class Kubernetes(SimpleBase):
             #            'logging-es', 'logging-kibana', 'fluentd-es', 'tiller-deploy',
             #            'prometheus', 'prometheus-node-exporter']
         })
+
+        splited_version = self.data['version'].split('.')
+        if int(splited_version[1]) >= 10:
+            self.data['kube_apiserver_options'] = '--enable-bootstrap-token-auth --authorization-mode=Node,RBAC' \
+                + ' --kubelet-client-certificate=/var/lib/kubernetes/kubernetes.pem' \
+                + ' --kubelet-client-key=/var/lib/kubernetes/kubernetes-key.pem'
+            self.data['kubelet_options'] = '--bootstrap-kubeconfig=/var/lib/kubelet/bootstrap.kubeconfig' \
+                + ' --anonymous-auth=false' \
+                + ' --client-ca-file=/root/kubernetes-tls-assets/ca.pem'
+        else:
+            self.data['kube_apiserver_options'] = '--experimental-bootstrap-token-auth --authorization-mode=RBAC'
+            self.data['kubelet_options'] = '--api-servers={0} '.format(databag.get('kubernetes.api_servers')) \
+                + '--experimental-bootstrap-kubeconfig=/var/lib/kubelet/bootstrap.kubeconfig'
 
     def setup(self):
         data = self.init()
@@ -145,7 +158,9 @@ class Kubernetes(SimpleBase):
                             break
                         time.sleep(10)
 
-                run('kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap')
+                run('kubectl create clusterrolebinding kubelet-cluster-admin-binding --clusterrole=cluster-admin --user=kubelet-bootstrap')
+
+                # run('kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap')
 
         bootstrap_kubeconfig = databag.get('kubernetes.bootstrap_kubeconfig')
         kube_proxy_kubeconfig = databag.get('kubernetes.kube_proxy_kubeconfig')
